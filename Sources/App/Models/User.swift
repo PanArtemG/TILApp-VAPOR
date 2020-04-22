@@ -15,11 +15,13 @@ final class User: Codable {
     var name: String
     var username: String
     var password: String
+    var email: String
     
-    init(name: String, username: String, password: String) {
+    init(name: String, username: String, password: String, email: String) {
         self.name = name
         self.username = username
         self.password = password
+        self.email = email
     }
     
     final class Public: Codable {
@@ -44,6 +46,7 @@ extension User: Migration {
         return Database.create(self, on: connection) { builder in
             try addProperties(to: builder)
             builder.unique(on: \.username)
+            builder.unique(on: \.email)
         }
     }
 }
@@ -89,7 +92,7 @@ struct AdminUser: Migration {
             fatalError("Failed to create admin user")
         }
         // 5
-        let user = User(name: "Admin", username: "admin", password: hashedPassword)
+        let user = User(name: "Admin", username: "admin", password: hashedPassword, email: "admin@localhost.local")
         // 6
         return user.save(on: connection).transform(to: ())
     }

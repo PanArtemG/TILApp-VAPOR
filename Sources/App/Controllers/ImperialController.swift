@@ -36,7 +36,7 @@ struct ImperialController: RouteCollection {
                         .first()
                         .flatMap(to: ResponseEncodable.self) { foundUser in
                             guard let existingUser = foundUser else {
-                                let user = User(name: userInfo.name, username: userInfo.email, password: UUID().uuidString)
+                                let user = User(name: userInfo.name, username: userInfo.email, password: UUID().uuidString, email: userInfo.email)
                                 return user
                                     .save(on: request)
                                     .map(to: ResponseEncodable.self) { user in

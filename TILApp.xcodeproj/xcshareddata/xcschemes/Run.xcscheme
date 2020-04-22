@@ -60,23 +60,6 @@
             ReferencedContainer = "container:TILApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "GOOGLE_CLIENT_SECRET"
-            value = "4dG_auvxgknlhsxVCXZmjKZl"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "GOOGLE_CALLBACK_URL"
-            value = "http://localhost:8080/oauth/google"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "GOOGLE_CLIENT_ID"
-            value = "695652333472-onjphbcfuf02fbu11qh9vrkqguev599a.apps.googleusercontent.com"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

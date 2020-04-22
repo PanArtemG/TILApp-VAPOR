@@ -13,7 +13,7 @@ struct WebsiteController: RouteCollection {
     func boot(router: Router) throws {
         
         //        This middleware reads the cookie from the request and looks up the session ID in the application’s session list. If the session contains a user, AuthenticationSessionsMiddleware adds it to the AuthenticationCache, making the user available later in the process.
-
+        
         let authSessionRoutes = router.grouped(User.authSessionsMiddleware())
         
         authSessionRoutes.get(use: indexHandler)
@@ -49,10 +49,10 @@ struct WebsiteController: RouteCollection {
             let userLoggedIn = try req.isAuthenticated(User.self)
             let showCookieMessage = req.http.cookies["cookies-accepted"] == nil
             let context = IndexContext(
-              title: "Home page",
-              acronyms: acronyms,
-              userLoggedIn: userLoggedIn,
-              showCookieMessage: showCookieMessage)
+                title: "Home page",
+                acronyms: acronyms,
+                userLoggedIn: userLoggedIn,
+                showCookieMessage: showCookieMessage)
             return try req.view().render("index", context)
         }
     }
@@ -98,10 +98,10 @@ struct WebsiteController: RouteCollection {
     }
     
     func createAcronymHandler(_ req: Request) throws -> Future<View> {
-//        let context = CreateAcronymContext()
+        //        let context = CreateAcronymContext()
         let token = try CryptoRandom()
-          .generateData(count: 16)
-          .base64EncodedString()
+            .generateData(count: 16)
+            .base64EncodedString()
         let context = CreateAcronymContext(csrfToken: token)
         try req.session()["CSRF_TOKEN"] = token
         return try req.view().render("createAcronym", context)
@@ -188,8 +188,8 @@ struct WebsiteController: RouteCollection {
         let expectedToken = try req.session()["CSRF_TOKEN"]
         try req.session()["CSRF_TOKEN"] = nil
         guard let csrfToken = data.csrfToken,
-          expectedToken == csrfToken else {
-            throw Abort(.badRequest)
+            expectedToken == csrfToken else {
+                throw Abort(.badRequest)
         }
         let user = try req.requireAuthenticated(User.self)
         let acronym = try Acronym(short: data.short, long: data.long, userID: user.requireID())
@@ -226,16 +226,16 @@ struct WebsiteController: RouteCollection {
     }
     
     func logoutHandler(_ req: Request) throws -> Response {
-      try req.unauthenticateSession(User.self)
-      return req.redirect(to: "/")
+        try req.unauthenticateSession(User.self)
+        return req.redirect(to: "/")
     }
     
     func registerHandler(_ req: Request) throws -> Future<View> {
         let context: RegisterContext
         if let message = req.query[String.self, at: "message"] {
-          context = RegisterContext(message: message)
+            context = RegisterContext(message: message)
         } else {
-          context = RegisterContext()
+            context = RegisterContext()
         }
         return try req.view().render("register", context)
     }
@@ -256,7 +256,7 @@ struct WebsiteController: RouteCollection {
         }
         
         let password = try BCrypt.hash(data.password)
-        let user = User(name: data.name, username: data.username, password: password)
+        let user = User(name: data.name, username: data.username, password: password, email: data.emailAddress)
         return user.save(on: req).map(to: Response.self) { user in
             try req.authenticateSession(user)
             return req.redirect(to: "/")
@@ -304,7 +304,7 @@ struct CategoryContext: Encodable {
 
 struct CreateAcronymContext: Encodable {
     let title = "Create An Acronym"
-//    let users: Future<[User]>
+    //    let users: Future<[User]>
     
     let csrfToken: String
 }
@@ -312,13 +312,13 @@ struct CreateAcronymContext: Encodable {
 struct EditAcronymContext: Encodable {
     let title = "Edit Acronym"
     let acronym: Acronym
-//    let users: Future<[User]>
+    //    let users: Future<[User]>
     let categories: Future<[Category]>
     let editing = true
 }
 
 struct CreateAcronymData: Content {
-//    let userID: User.ID
+    //    let userID: User.ID
     let short: String
     let long: String
     let categories: [String]?
@@ -349,24 +349,26 @@ struct RegisterContext: Encodable {
 }
 
 struct RegisterData: Content {
-  let name: String
-  let username: String
-  let password: String
-  let confirmPassword: String
+    let name: String
+    let username: String
+    let password: String
+    let confirmPassword: String
+    let emailAddress: String
 }
 
 extension RegisterData: Validatable, Reflectable {
     
-  static func validations() throws -> Validations<RegisterData> {
-    var validations = Validations(RegisterData.self)
-    try validations.add(\.name, .ascii)
-    try validations.add(\.username, .alphanumeric && .count(3...))
-    try validations.add(\.password, .count(8...))
-    validations.add("passwords match") { model in
-      guard model.password == model.confirmPassword else {
-        throw BasicValidationError("passwords don’t match")
-      }
+    static func validations() throws -> Validations<RegisterData> {
+        var validations = Validations(RegisterData.self)
+        try validations.add(\.name, .ascii)
+        try validations.add(\.username, .alphanumeric && .count(3...))
+        try validations.add(\.password, .count(8...))
+        try validations.add(\.emailAddress, .email)
+        validations.add("passwords match") { model in
+            guard model.password == model.confirmPassword else {
+                throw BasicValidationError("passwords don’t match")
+            }
+        }
+        return validations
     }
-    return validations
-  }
 }
