@@ -11,7 +11,11 @@ import Authentication
 import SendGrid
 
 struct WebsiteController: RouteCollection {
+    
+    let imageFolder = "ProfilePictures/"
+    
     func boot(router: Router) throws {
+        
         
         //        This middleware reads the cookie from the request and looks up the session ID in the application’s session list. If the session contains a user, AuthenticationSessionsMiddleware adds it to the AuthenticationCache, making the user available later in the process.
         
@@ -29,10 +33,11 @@ struct WebsiteController: RouteCollection {
         authSessionRoutes.post("logout", use: logoutHandler)
         authSessionRoutes.get("register", use: registerHandler)
         authSessionRoutes.post(RegisterData.self, at: "register", use: registerPostHandler)
-        authSessionRoutes.get( "forgottenPassword", use: forgottenPasswordHandler)
+        authSessionRoutes.get("forgottenPassword", use: forgottenPasswordHandler)
         authSessionRoutes.post("forgottenPasswordConfirmed", use: forgottenPasswordPostHandler)
         authSessionRoutes.get("resetPassword", use: resetPasswordHandler)
-        authSessionRoutes.post( ResetPasswordData.self, at: "resetPassword", use: resetPasswordPostHandler)
+        authSessionRoutes.post(ResetPasswordData.self, at: "resetPassword", use: resetPasswordPostHandler)
+        authSessionRoutes.get("users", User.parameter, "profilePicture", use: getUsersProfilePictureHandler)
         
         // «This creates a new route group, extending from authSessionRoutes, that includes RedirectMiddleware. The application runs a request through RedirectMiddleware before it reaches the route handler, but after AuthenticationSessionsMiddleware. This allows RedirectMiddleware to check for an authenticated user. RedirectMiddleware requires you to specify the path for redirecting »
         
@@ -43,6 +48,7 @@ struct WebsiteController: RouteCollection {
         protectedRoutes.get("acronyms", Acronym.parameter, "edit", use: editAcronymHandler)
         protectedRoutes.post("acronyms", Acronym.parameter, "edit", use: editAcronymPostHandler)
         protectedRoutes.post("acronyms", Acronym.parameter, "delete", use: deleteAcronymHandler)
+        protectedRoutes.get("users", User.parameter, "addProfilePicture", use: addProfilePictureHandler)
         
         
         
@@ -74,7 +80,8 @@ struct WebsiteController: RouteCollection {
     func userHandler(_ req: Request) throws -> Future<View> {
         return try req.parameters.next(User.self).flatMap(to: View.self) { user in
             return try user.acronyms.query(on: req).all().flatMap(to: View.self) { acronyms in
-                let context = UserContext(title: user.name, user: user, acronyms: acronyms)
+                let loggedInUser = try req.authenticated(User.self)
+                let context = UserContext(title: user.name, user: user, acronyms: acronyms, authenticatedUser: loggedInUser)
                 return try req.view().render("user", context)
             }
         }
@@ -318,60 +325,84 @@ struct WebsiteController: RouteCollection {
                 }
                 
         }
-        
-        // 1
-        func resetPasswordPostHandler(_ req: Request, data: ResetPasswordData) throws -> Future<Response> {
-            // 2
-            guard data.password == data.confirmPassword else {
-              return try req.view().render(
-                "resetPassword",
-                ResetPasswordContext(error: true))
-                .encode(for: req)
-            }
-            // 3
-            let resetPasswordUser = try req.session()
-              .get("ResetPasswordUser", as: User.self)
-            try req.session()["ResetPasswordUser"] = nil
-            // 4
-            let newPassword = try BCrypt.hash(data.password)
-            resetPasswordUser.password = newPassword
-            // 5
-            return resetPasswordUser
-              .save(on: req)
-              .transform(to: req.redirect(to: "/login"))
-        }
     }
-    
+        
     func resetPasswordHandler(_ req: Request)throws -> Future<View> {
         // 1
         guard let token = req.query[String.self, at: "token"] else {
-          return try req.view().render("resetPassword", ResetPasswordContext(error: true)
-          )
+            return try req.view().render("resetPassword", ResetPasswordContext(error: true))
         }
         // 2
         return ResetPasswordToken.query(on: req)
-          .filter(\.token == token)
-          .first()
-          .map(to: ResetPasswordToken.self) { token in
-            // 3
-            guard let token = token else {
-              throw Abort.redirect(to: "/")
-            }
-            return token
-          }.flatMap { token in
+            .filter(\.token == token)
+            .first()
+            .map(to: ResetPasswordToken.self) { token in
+                // 3
+                guard let token = token else {  throw Abort.redirect(to: "/") }
+                return token
+        }.flatMap { token in
             // 4
             return token.user.get(on: req).flatMap { user in
-              try req.session().set("ResetPasswordUser", to: user)
-              // 5
-              return token.delete(on: req)
+                try req.session().set("ResetPasswordUser", to: user)
+                // 5
+                return token.delete(on: req)
             }
-          }.flatMap {
+        }.flatMap {
             // 6
-            try req.view().render(
-              "resetPassword",
-              ResetPasswordContext()
-            )
-          }
+            try req.view().render("resetPassword", ResetPasswordContext())
+        }
+    }
+    
+    func resetPasswordPostHandler(_ req: Request, data: ResetPasswordData) throws -> Future<Response> {
+        // 2
+        guard data.password == data.confirmPassword else {
+          return try req.view().render("resetPassword", ResetPasswordContext(error: true))
+            .encode(for: req)
+        }
+        // 3
+        let resetPasswordUser = try req.session()
+          .get("ResetPasswordUser", as: User.self)
+        try req.session()["ResetPasswordUser"] = nil
+        // 4
+        let newPassword = try BCrypt.hash(data.password)
+        resetPasswordUser.password = newPassword
+        // 5
+        return resetPasswordUser
+          .save(on: req)
+          .transform(to: req.redirect(to: "/login"))
+    }
+    
+    func addProfilePictureHandler(_ req: Request) throws -> Future<View> {
+        return try req.parameters.next(User.self)
+          .flatMap { user in
+            try req.view().render("addProfilePicture", ["title": "Add Profile Picture", "username": user.name])
+       }
+    }
+    
+    func addProfilePicturePostHandler(_ req: Request) throws -> Future<Response> {
+        return try flatMap(
+          to: Response.self,
+          req.parameters.next(User.self),
+          req.content.decode(ImageUploadData.self)) { user, imageData in
+            let workPath = try req.make(DirectoryConfig.self).workDir
+            let name = try "\(user.requireID())-\(UUID().uuidString).jpg"
+            let path = workPath + self.imageFolder + name
+            FileManager().createFile(atPath: path, contents: imageData.picture, attributes: nil)
+            user.profilePicture = name
+            let redirect = try req.redirect(to: "/users/\(user.requireID())")
+            return user.save(on: req).transform(to: redirect)
+        }
+    }
+    
+    func getUsersProfilePictureHandler(_ req: Request) throws -> Future<Response> {
+        return try req.parameters.next(User.self)
+          .flatMap(to: Response.self) { user in
+            guard let filename = user.profilePicture else {
+              throw Abort(.notFound)
+            }
+            let path = try req.make(DirectoryConfig.self).workDir + self.imageFolder + filename
+          return try req.streamFile(at: path)
+        }
     }
     
 }
@@ -395,6 +426,7 @@ struct UserContext: Encodable {
     let title: String
     let user: User
     let acronyms: [Acronym]
+    let authenticatedUser: User?
 }
 
 struct AllUsersContext: Encodable {
@@ -485,15 +517,19 @@ extension RegisterData: Validatable, Reflectable {
 }
 
 struct ResetPasswordContext: Encodable {
-  let title = "Reset Password"
-  let error: Bool?
-
-  init(error: Bool? = false) {
-    self.error = error
-  }
+    let title = "Reset Password"
+    let error: Bool?
+    
+    init(error: Bool? = false) {
+        self.error = error
+    }
 }
 
 struct ResetPasswordData: Content {
-  let password: String
-  let confirmPassword: String
+    let password: String
+    let confirmPassword: String
+}
+
+struct ImageUploadData: Content {
+  var picture: Data
 }

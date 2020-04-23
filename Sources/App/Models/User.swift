@@ -16,12 +16,14 @@ final class User: Codable {
     var username: String
     var password: String
     var email: String
+    var profilePicture: String?
     
-    init(name: String, username: String, password: String, email: String) {
+    init(name: String, username: String, password: String, email: String, profilePicture: String? = nil) {
         self.name = name
         self.username = username
         self.password = password
         self.email = email
+        self.profilePicture = profilePicture
     }
     
     final class Public: Codable {
